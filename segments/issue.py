@@ -1,0 +1,22 @@
+import hashlib
+import json
+
+from segments.evidence import build_evidence
+from segments.manifest import IssueRegister, IssuedSegment, SegmentManifest
+from segments.ranges import SegmentRange, validate_segment_range
+from trial.revisions import RevisionStore
+
+
+def issue(
+    revisions: RevisionStore, register: IssueRegister, revision_id: str, span: SegmentRange
+) -> IssuedSegment:
+    plan = revisions.get_plan(revision_id)
+    bounds = validate_segment_range(plan, span)
+    source = revisions.get(revision_id, first=bounds.first, last=bounds.last)
+    identity = json.dumps([register.station, revision_id, bounds.first, bounds.last]).encode('ascii')
+    segment_id = f'{register.station}:segment:{hashlib.sha256(identity).hexdigest()}'
+    manifest = SegmentManifest(
+        segment_id, register.station, plan.trial_id, revision_id,
+        plan.first, plan.last, bounds.first, bounds.last,
+    )
+    return register.save(IssuedSegment(manifest, build_evidence(source, bounds)))
