@@ -5,6 +5,7 @@ from dataclasses import asdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import pending_workflow
 from exchange.admission import receive
 from exchange.store import AdmissionStore
 from reports.catalog import ReportCatalog
@@ -96,6 +97,8 @@ def main():
         ],
         'oracle': 'Hand calculation closes 5 to 2 as a full cycle and leaves 0 to 6 as a half cycle. Reopen must return the same issued receipt and the selected spans.',
     }, sort_keys=True))
+    print('PENDING_REVIEW_DEMO alternate cuts, source shutdown and reopen readback')
+    pending_workflow.run()
 
 
 if __name__ == '__main__':

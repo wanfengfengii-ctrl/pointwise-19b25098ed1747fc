@@ -3,6 +3,19 @@ import sqlite3
 from dataclasses import dataclass
 
 from segments.payload import SegmentPayload, decode_payload, encode_payload
+from segments.pending import PendingPayload, decode_pending_payload, encode_pending_payload
+
+
+def encode_versioned_payload(version: int, payload) -> dict:
+    if version == 1:
+        return encode_payload(payload)
+    return encode_pending_payload(payload)
+
+
+def decode_versioned_payload(version: int, value: object, first: int, last: int):
+    if version == 1:
+        return decode_payload(value, first, last)
+    return decode_pending_payload(value, first, last)
 
 
 @dataclass(frozen=True)
@@ -21,7 +34,7 @@ class SegmentManifest:
 @dataclass(frozen=True)
 class IssuedSegment:
     manifest: SegmentManifest
-    payload: SegmentPayload
+    payload: SegmentPayload | PendingPayload
 
     def to_wire(self) -> dict:
         manifest = self.manifest
@@ -33,7 +46,7 @@ class IssuedSegment:
             'revision_id': manifest.revision_id,
             'plan': [manifest.plan_first, manifest.plan_last],
             'span': [manifest.first, manifest.last],
-            'payload': encode_payload(self.payload),
+            'payload': encode_versioned_payload(manifest.version, self.payload),
         }
 
 
@@ -42,7 +55,9 @@ def _restore(wire: dict) -> IssuedSegment:
         wire['segment_id'], wire['source'], wire['trial_id'], wire['revision_id'],
         *wire['plan'], *wire['span'], version=wire['version'],
     )
-    return IssuedSegment(manifest, decode_payload(wire['payload'], manifest.first, manifest.last))
+    return IssuedSegment(
+        manifest, decode_versioned_payload(wire['version'], wire['payload'], manifest.first, manifest.last)
+    )
 
 
 class IssueRegister:

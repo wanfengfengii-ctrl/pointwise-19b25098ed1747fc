@@ -1,8 +1,7 @@
 import json
 from dataclasses import dataclass
 
-from segments.manifest import IssuedSegment, SegmentManifest
-from segments.payload import decode_payload
+from segments.manifest import IssuedSegment, SegmentManifest, decode_versioned_payload
 
 
 @dataclass(frozen=True)
@@ -28,8 +27,9 @@ def verify_envelope(wire: object) -> VerifiedEnvelope:
     identifiers = ('segment_id', 'source', 'trial_id', 'revision_id')
     if not isinstance(wire, dict) or wire.keys() != {*identifiers, 'version', 'plan', 'span', 'payload'}:
         raise ValueError('INVALID_ENVELOPE: unexpected fields')
-    if type(wire['version']) is not int or wire['version'] != 1:
+    if type(wire['version']) is not int or wire['version'] not in (1, 2):
         raise ValueError('INVALID_ENVELOPE: unsupported version')
+    version = wire['version']
     for field in identifiers:
         if not isinstance(wire[field], str) or not wire[field].strip():
             raise ValueError(f'INVALID_ENVELOPE: {field} is required')
@@ -38,11 +38,11 @@ def verify_envelope(wire: object) -> VerifiedEnvelope:
         first, last = _interval(wire['span'])
         if not plan_first <= first <= last <= plan_last:
             raise ValueError('segment is outside declared plan')
-        payload = decode_payload(wire['payload'], first, last)
+        payload = decode_versioned_payload(version, wire['payload'], first, last)
     except ValueError as error:
         raise ValueError(f'INVALID_ENVELOPE: {error}') from error
     manifest = SegmentManifest(
-        *(wire[field] for field in identifiers), plan_first, plan_last, first, last,
+        *(wire[field] for field in identifiers), plan_first, plan_last, first, last, version=version,
     )
     segment = IssuedSegment(manifest, payload)
     return VerifiedEnvelope(segment, canonical_content(segment))
